@@ -1,0 +1,1 @@
+export { useAnalisis } from './useAnalisis';
