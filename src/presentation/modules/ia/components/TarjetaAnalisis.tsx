@@ -4,15 +4,20 @@ interface PropsTarjetaAnalisis {
   titulo: string;
   analisis: string;
   alAgregarAlDashboard: () => void;
+  animationDelay?: number; // milliseconds
 }
 
 const TarjetaAnalisis: React.FC<PropsTarjetaAnalisis> = ({
   titulo,
   analisis,
   alAgregarAlDashboard,
+  animationDelay = 0,
 }) => {
   return (
-    <article className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-indigo-500/10 backdrop-blur transition hover:border-indigo-300/50 hover:shadow-indigo-500/20">
+    <article
+      className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-indigo-500/10 backdrop-blur transition hover:border-indigo-300/50 hover:shadow-indigo-500/20 animate-fadeIn"
+      style={{ animationDelay: `${animationDelay}ms` }}
+    >
       <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-indigo-500/10 blur-2xl transition group-hover:scale-110" aria-hidden />
       
       <div className="relative space-y-4">

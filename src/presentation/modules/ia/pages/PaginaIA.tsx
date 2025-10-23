@@ -5,6 +5,7 @@ import 'react-resizable/css/styles.css';
 
 import { CargaArchivo, TarjetaAnalisis } from '../components/index.ts';
 import GraficoRecharts from '../components/GraficoRecharts';
+import ToastContainer, { ToastItem } from '../components/Toast';
 import { useAnalisis } from '../hooks/index.ts';
 import type { Grafico, SugerenciaAnalisis } from '../../../../domain/entities/Analisis.ts';
 
@@ -38,6 +39,7 @@ const PaginaIA: React.FC = () => {
 
   const [archivoSubido, setArchivoSubido] = useState(false);
   const [graficosDelDashboard, setGraficosDelDashboard] = useState<Grafico[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const limpiarTodo = () => {
     setGraficosDelDashboard([]);
@@ -54,8 +56,16 @@ const PaginaIA: React.FC = () => {
       setArchivoSubido(false);
       await analizarArchivo(archivo);
       setArchivoSubido(true);
+      // Notificar al usuario
+      const id = `t-${Date.now()}`;
+      setToasts(prev => [...prev, { id, message: 'Archivo analizado con éxito', type: 'success' }]);
+      // auto remove
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
     } catch (err) {
       console.error('Error al analizar archivo:', err);
+      const id = `te-${Date.now()}`;
+      setToasts(prev => [...prev, { id, message: 'Error al analizar archivo', type: 'error' }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
     }
   };
 
@@ -97,13 +107,22 @@ const PaginaIA: React.FC = () => {
       const tipoBackend = sugerencia.configuracion.tipoBackend || mapearTipoBackend(sugerencia.tipoGrafico);
       
       const parametros = {
-        x_axis: sugerencia.configuracion.ejeX,
-        y_axis: sugerencia.configuracion.ejeY || undefined,
+        eje_x: sugerencia.configuracion.ejeX,
+        eje_y: sugerencia.configuracion.ejeY || undefined,
       };
 
       console.log('📤 Enviando al backend:', { tipoBackend, parametros });
 
       const datos = await obtenerDatosGrafico(resultado.archivoId, tipoBackend, parametros);
+
+      // Validar que los datos son válidos antes de renderizar el gráfico
+      if (!datos || !datos.datos || !Array.isArray(datos.datos) || datos.datos.length === 0) {
+        console.warn('⚠️ Datos del gráfico vacíos o inválidos:', datos);
+        const id = `te-${Date.now()}`;
+        setToasts(prev => [...prev, { id, message: 'No hay datos suficientes para generar el gráfico', type: 'error' }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+        return;
+      }
 
       const idUnico = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
@@ -118,8 +137,14 @@ const PaginaIA: React.FC = () => {
       };
 
       setGraficosDelDashboard(prev => [...prev, nuevoGrafico]);
+      const id = `tg-${Date.now()}`;
+      setToasts(prev => [...prev, { id, message: 'Gráfico agregado al dashboard', type: 'success' }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
     } catch (err) {
       console.error('Error al obtener datos del gráfico:', err);
+      const id = `teg-${Date.now()}`;
+      setToasts(prev => [...prev, { id, message: 'Error al obtener datos del gráfico', type: 'error' }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
     }
   };
 
@@ -212,12 +237,13 @@ const PaginaIA: React.FC = () => {
             </button>
           </div>
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {sugerencias.map(sugerencia => (
+            {sugerencias.map((sugerencia, idx) => (
               <TarjetaAnalisis
                 key={sugerencia.id}
                 titulo={sugerencia.titulo}
                 analisis={sugerencia.descripcion}
                 alAgregarAlDashboard={() => manejarAgregarAlDashboard(sugerencia)}
+                animationDelay={idx * 90}
               />
             ))}
           </div>
@@ -288,6 +314,7 @@ const PaginaIA: React.FC = () => {
           </CuadriculaResponsiva>
         </section>
       )}
+      <ToastContainer toasts={toasts} onRemove={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
     </div>
   );
 };

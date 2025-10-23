@@ -1,5 +1,11 @@
 import axios from 'axios';
-import type { ResultadoAnalisis, SugerenciaAnalisis } from '../../domain/entities/Analisis';
+import type { 
+  ResultadoAnalisis, 
+  SugerenciaAnalisis,
+  RespuestaAnalisisAPI,
+  RespuestaGraficoAPI,
+  SolicitudGraficoAPI
+} from '../../domain/entities/Analisis';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const API_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT) || 30000;
@@ -64,55 +70,7 @@ const datosSimulados = {
   }
 };
 
-export interface RespuestaSubida {
-  exito: boolean;
-  mensaje?: string;
-  nombre_archivo: string;
-  id_archivo: string;
-  columnas: string[];
-  total_filas: number;
-  sugerencias: Array<{
-    id: string;
-    titulo: string;
-    descripcion: string;
-    tipo_grafico: string;
-    parametros: {
-      x_axis?: string;
-      y_axis?: string;
-      x_column?: string;
-      y_column?: string;
-      columna_x?: string;
-      columna_y?: string;
-      column_x?: string;
-      column_y?: string;
-    };
-    confidencia: number;
-  }>;
-}
-
-export interface RespuestaGrafico {
-  exito: boolean;
-  mensaje?: string;
-  datos: any[];
-}
-
-export interface Sugerencia {
-  id: string;
-  titulo: string;
-  descripcion: string;
-  tipo_grafico: string;
-  parametros: {
-    x_axis?: string;
-    y_axis?: string;
-    x_column?: string;
-    y_column?: string;
-    columna_x?: string;
-    columna_y?: string;
-    column_x?: string;
-    column_y?: string;
-  };
-  confidencia: number;
-}
+// Interfaces movidas a domain/entities/Analisis.ts
 
 const mapearTipoGrafico = (tipoBackend: string) => {
   const mapeo: Record<string, string> = {
@@ -127,20 +85,13 @@ const mapearTipoGrafico = (tipoBackend: string) => {
   return mapeo[tipoBackend] || 'barras';
 };
 
-const detectarParametros = (sugerencia: Sugerencia) => {
+// Función auxiliar para extraer parámetros de sugerencias de datos simulados
+const detectarParametros = (sugerencia: typeof datosSimulados.sugerencias[0]) => {
   const { parametros } = sugerencia;
   
-  // Detectar eje X con múltiples variantes
-  const ejeX = parametros.x_axis || 
-              parametros.x_column || 
-              parametros.columna_x || 
-              parametros.column_x;
-              
-  // Detectar eje Y con múltiples variantes
-  const ejeY = parametros.y_axis || 
-              parametros.y_column || 
-              parametros.columna_y || 
-              parametros.column_y;
+  // Los datos simulados usan x_axis/y_axis
+  const ejeX = parametros.x_axis || '';
+  const ejeY = parametros.y_axis;
               
   return { ejeX, ejeY };
 };
@@ -149,10 +100,10 @@ export const subirArchivo = async (archivo: File): Promise<{
   resultado: ResultadoAnalisis;
   sugerencias: SugerenciaAnalisis[];
 }> => {
-  // Si estamos en modo demo o si el backend no está disponible, usar datos simulados
+  // Si estamos en modo demo, usar datos simulados
   if (MODO_DEMO) {
     console.log('🎭 Modo demo activado - usando datos simulados');
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simular tiempo de procesamiento
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     const resultado: ResultadoAnalisis = {
       archivoId: 'demo-file-id',
@@ -188,40 +139,53 @@ export const subirArchivo = async (archivo: File): Promise<{
     console.log('📤 Subiendo archivo:', archivo.name);
     console.log('📍 URL del endpoint:', `${API_URL}/upload`);
 
-    const response = await apiClient.post<RespuestaSubida>('/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // No establecer manualmente 'Content-Type' — dejar que el navegador añada el boundary
+    const response = await apiClient.post<RespuestaAnalisisAPI>('/upload', formData);
     const data = response.data;
 
     console.log('📥 Respuesta del servidor:', data);
 
-    if (!data.exito) {
-      throw new Error(data.mensaje || 'Error al subir el archivo');
-    }
+    // Verificar estado de la respuesta - aceptar valores en español e inglés
+    const estadoRaw = (data.estado || '').toString();
+    const estado = estadoRaw.toLowerCase();
+    const estadosOk = [
+      'analyzed',
+      'analizado',
+      'processed',
+      'procesado',
+      'done',
+      'completado',
+      'completo',
+      'success',
+      'ok',
+    ];
 
+    if (!estadosOk.includes(estado)) {
+      console.warn('Estado inesperado del análisis:', data.estado);
+      throw new Error('Error al analizar el archivo');
+    }
+    
+    // Convertir respuesta de la API a nuestro formato interno
     const resultado: ResultadoAnalisis = {
       archivoId: data.id_archivo,
       nombreArchivo: data.nombre_archivo,
-      columnas: data.columnas,
-      totalFilas: data.total_filas,
+      columnas: data.metadatos.nombres_columnas,
+      totalFilas: data.metadatos.filas,
     };
 
-    const sugerencias: SugerenciaAnalisis[] = data.sugerencias.map((sug) => {
-      const { ejeX, ejeY } = detectarParametros(sug);
-      
+    // Convertir sugerencias de gráficos
+    const sugerencias: SugerenciaAnalisis[] = data.analisis.sugerencias_graficos.map((sug, index) => {
       return {
-        id: sug.id,
+        id: `sugerencia-${index + 1}`,
         titulo: sug.titulo,
-        descripcion: sug.descripcion,
+        descripcion: sug.insight,
         tipoGrafico: mapearTipoGrafico(sug.tipo_grafico) as any,
         configuracion: {
-          ejeX: ejeX || '',
-          ejeY: ejeY,
+          ejeX: sug.parametros.eje_x,
+          ejeY: sug.parametros.eje_y,
           tipoBackend: sug.tipo_grafico,
         },
-        confidencia: sug.confidencia,
+        confidencia: 0.9, // El backend no envía confidencia aún, valor por defecto
       };
     });
 
@@ -264,11 +228,12 @@ export const subirArchivo = async (archivo: File): Promise<{
 
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      const message = error.response?.data?.mensaje || error.response?.data?.message;
+      const message = error.response?.data?.mensaje || error.response?.data?.detalle;
       
       if (status === 404) {
         throw new Error('Servidor no encontrado. Asegúrate de que el backend esté ejecutándose en http://localhost:8000');
       } else if (status === 500) {
+        console.error('Respuesta del servidor (500):', error.response?.data);
         throw new Error('Error interno del servidor: ' + (message || 'Error desconocido'));
       }
       
@@ -285,7 +250,7 @@ export const subirArchivo = async (archivo: File): Promise<{
 export const obtenerDatosGrafico = async (
   idArchivo: string,
   tipoGrafico: string,
-  parametros: { x_axis?: string; y_axis?: string }
+  parametros: { eje_x?: string; eje_y?: string; agregacion?: string }
 ): Promise<{ datos: any[] }> => {
   // Si estamos en modo demo o usando datos simulados
   if (MODO_DEMO || idArchivo.includes('demo') || idArchivo.includes('fallback')) {
@@ -301,25 +266,61 @@ export const obtenerDatosGrafico = async (
   try {
     console.log('📊 Obteniendo datos del gráfico:', { idArchivo, tipoGrafico, parametros });
 
-    const payload = {
+    // Construir solicitud con nuevos nombres en español
+    const solicitud: SolicitudGraficoAPI = {
       id_archivo: idArchivo,
       tipo_grafico: tipoGrafico,
-      parametros: {
-        x_axis: parametros.x_axis,
-        ...(parametros.y_axis && { y_axis: parametros.y_axis }),
-      },
+      eje_x: parametros.eje_x || '',
+      ...(parametros.eje_y && { eje_y: parametros.eje_y }),
+      ...(parametros.agregacion && { agregacion: parametros.agregacion }),
     };
 
-    const response = await apiClient.post<RespuestaGrafico>('/chart-data', payload);
-    const data = response.data;
+    // Intentar múltiples endpoints en orden de preferencia
+    const endpoints = [
+      '/chart-data', 
+      '/api/charts/chart-data',
+      '/graficos/chart-data',
+      '/charts/chart-data'
+    ];
+    let lastError: any = null;
 
-    console.log('📈 Datos del gráfico recibidos:', data);
-
-    if (!data.exito) {
-      throw new Error(data.mensaje || 'Error al obtener datos del gráfico');
+    for (const ep of endpoints) {
+      try {
+        console.log(`🔍 Intentando endpoint: ${ep}`);
+        const response = await apiClient.post<RespuestaGraficoAPI>(ep, solicitud);
+        const data = response.data;
+        console.log(`📈 Datos del gráfico recibidos desde ${ep}:`, data);
+        return { datos: data.datos };
+      } catch (err) {
+        lastError = err;
+        
+        if (axios.isAxiosError(err)) {
+          const status = err.response?.status;
+          
+          // Para 404 (Not Found) o 405 (Method Not Allowed), intentar siguiente endpoint
+          if (status === 404) {
+            console.warn(`❌ Endpoint no encontrado: ${ep} (404)`);
+            continue;
+          } else if (status === 405) {
+            console.warn(`❌ Método no permitido: ${ep} (405 - posible configuración de backend)`);
+            continue;
+          } else {
+            // Para otros errores (500, 401, etc.), no intentar más endpoints
+            console.error(`❌ Error en ${ep}: ${status} - ${err.response?.data?.mensaje || err.message}`);
+            throw err;
+          }
+        }
+        
+        // Error no relacionado con HTTP
+        console.error(`❌ Error de conexión en ${ep}:`, err);
+        throw err;
+      }
     }
 
-    return { datos: data.datos };
+    // Si llegamos aquí, todos los endpoints devolvieron 404/405
+    console.error(`❌ Todos los endpoints para chart-data fallaron. Últimos intentados: ${endpoints.join(', ')}`);
+    console.warn('ℹ️  Posible problema: El backend no tiene configurado el endpoint para obtener datos de gráficos');
+    throw lastError;
   } catch (error) {
     console.error('Error al obtener datos del gráfico:', error);
     

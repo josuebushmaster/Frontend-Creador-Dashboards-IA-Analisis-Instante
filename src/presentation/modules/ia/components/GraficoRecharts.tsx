@@ -24,36 +24,62 @@ interface PropsGraficoRecharts {
 }
 
 const normalizarDatos = (datos: any[]) => {
-  if (!datos || datos.length === 0) return [];
+  if (!datos || !Array.isArray(datos) || datos.length === 0) {
+    console.warn('⚠️ Datos vacíos o inválidos para normalizar:', datos);
+    return [];
+  }
+
+  // Filtrar elementos nulos o inválidos
+  const datosValidos = datos.filter(item => item && typeof item === 'object');
+  
+  if (datosValidos.length === 0) {
+    console.warn('⚠️ No hay elementos válidos después del filtrado');
+    return [];
+  }
 
   // Detectar formato de datos
-  const primerItem = datos[0];
+  const primerItem = datosValidos[0];
   
-  // Formato {name, value} - típico para gráficos de barras/líneas
-  if ('name' in primerItem && 'value' in primerItem) {
-    return datos;
-  }
-  
-  // Formato {x, y} - típico para scatter
-  if ('x' in primerItem && 'y' in primerItem) {
-    return datos.map(item => ({ name: item.x, value: item.y, x: item.x, y: item.y }));
-  }
-  
-  // Formato {label, valor} 
-  if ('label' in primerItem && 'valor' in primerItem) {
-    return datos.map(item => ({ name: item.label, value: item.valor }));
-  }
+  try {
+    // Formato {name, value} - típico para gráficos de barras/líneas
+    if ('name' in primerItem && 'value' in primerItem) {
+      return datosValidos.filter(item => 
+        item.name != null && 
+        item.value != null && 
+        !isNaN(Number(item.value))
+      );
+    }
+    
+    // Formato {x, y} - típico para scatter
+    if ('x' in primerItem && 'y' in primerItem) {
+      return datosValidos
+        .filter(item => item.x != null && item.y != null && !isNaN(Number(item.y)))
+        .map(item => ({ name: item.x, value: item.y, x: item.x, y: item.y }));
+    }
+    
+    // Formato {label, valor} 
+    if ('label' in primerItem && 'valor' in primerItem) {
+      return datosValidos
+        .filter(item => item.label != null && item.valor != null && !isNaN(Number(item.valor)))
+        .map(item => ({ name: item.label, value: item.valor }));
+    }
 
-  // Intento genérico: tomar las primeras dos propiedades
-  const keys = Object.keys(primerItem);
-  if (keys.length >= 2) {
-    return datos.map(item => ({
-      name: item[keys[0]],
-      value: item[keys[1]]
-    }));
+    // Intento genérico: tomar las primeras dos propiedades
+    const keys = Object.keys(primerItem);
+    if (keys.length >= 2) {
+      return datosValidos
+        .filter(item => item[keys[0]] != null && item[keys[1]] != null)
+        .map(item => ({
+          name: item[keys[0]],
+          value: isNaN(Number(item[keys[1]])) ? 0 : Number(item[keys[1]])
+        }));
+    }
+    
+    return datosValidos;
+  } catch (error) {
+    console.error('❌ Error al normalizar datos:', error);
+    return [];
   }
-  
-  return datos;
 };
 
 const GraficoRecharts: React.FC<PropsGraficoRecharts> = ({ grafico }) => {
@@ -188,8 +214,15 @@ const GraficoRecharts: React.FC<PropsGraficoRecharts> = ({ grafico }) => {
 
   if (!datosNormalizados.length) {
     return (
-      <div className="flex h-full items-center justify-center text-slate-400">
-        <p>No hay datos disponibles</p>
+      <div className="flex h-full flex-col items-center justify-center text-slate-400 p-6">
+        <svg className="h-12 w-12 mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <p className="text-sm font-medium text-slate-400 mb-1">No hay datos disponibles</p>
+        <p className="text-xs text-slate-500 text-center">
+          Los datos del gráfico están vacíos o tienen un formato incompatible
+        </p>
       </div>
     );
   }

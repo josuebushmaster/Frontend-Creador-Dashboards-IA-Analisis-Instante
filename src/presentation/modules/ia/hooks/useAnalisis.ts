@@ -45,7 +45,7 @@ export const useAnalisis = () => {
   const obtenerDatosGrafico = async (
     idArchivo: string,
     tipoGrafico: string,
-    parametros: { x_axis?: string; y_axis?: string }
+    parametros: { eje_x?: string; eje_y?: string; agregacion?: string }
   ) => {
     return await obtenerDatosGraficoAPI(idArchivo, tipoGrafico, parametros);
   };
