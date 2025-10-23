@@ -5,6 +5,9 @@ export interface ConfiguracionGrafico {
   ejeY?: string;
   datos?: any[];
   tipoBackend?: string;
+  // Metadata opcional sobre la fuente de datos
+  fuente?: 'real' | 'simulado';
+  endpointUsado?: string | null;
 }
 
 export interface Grafico {

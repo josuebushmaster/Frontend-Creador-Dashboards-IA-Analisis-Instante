@@ -113,15 +113,26 @@ const PaginaIA: React.FC = () => {
 
       console.log('📤 Enviando al backend:', { tipoBackend, parametros });
 
-      const datos = await obtenerDatosGrafico(resultado.archivoId, tipoBackend, parametros);
+      const respuesta = await obtenerDatosGrafico(resultado.archivoId, tipoBackend, parametros) as any;
+
+      // Compatibilidad: la API devuelve { datos, fuente?, endpointUsado? }
+      const datosArray = respuesta?.datos || respuesta;
 
       // Validar que los datos son válidos antes de renderizar el gráfico
-      if (!datos || !datos.datos || !Array.isArray(datos.datos) || datos.datos.length === 0) {
-        console.warn('⚠️ Datos del gráfico vacíos o inválidos:', datos);
+      if (!datosArray || !Array.isArray(datosArray) || datosArray.length === 0) {
+        console.warn('⚠️ Datos del gráfico vacíos o inválidos:', respuesta);
         const id = `te-${Date.now()}`;
         setToasts(prev => [...prev, { id, message: 'No hay datos suficientes para generar el gráfico', type: 'error' }]);
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
         return;
+      }
+
+      // Si los datos vienen simulados, notificar y marcar el grafico
+      const esSimulado = respuesta?.fuente === 'simulado' || respuesta?.endpointUsado == null;
+      if (esSimulado) {
+        const id = `ts-${Date.now()}`;
+        setToasts(prev => [...prev, { id, message: 'Backend de gráficos no disponible — usando datos simulados', type: 'info' }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
       }
 
       const idUnico = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -132,9 +143,23 @@ const PaginaIA: React.FC = () => {
         tipo: sugerencia.tipoGrafico,
         configuracion: {
           ...sugerencia.configuracion,
-          datos: datos.datos,
+          datos: datosArray,
+          fuente: respuesta?.fuente || 'real',
+          endpointUsado: respuesta?.endpointUsado || null,
         },
       };
+
+      // Depuración: mostrar qué tipo y datos se van a agregar al dashboard
+      try {
+        // eslint-disable-next-line no-console
+        console.debug('Agregando gráfico al dashboard:', {
+          id: nuevoGrafico.id,
+          tipo: nuevoGrafico.tipo,
+          muestraDatos: nuevoGrafico.configuracion.datos?.slice(0, 5),
+        });
+      } catch (e) {
+        // ignore
+      }
 
       setGraficosDelDashboard(prev => [...prev, nuevoGrafico]);
       const id = `tg-${Date.now()}`;
@@ -237,13 +262,13 @@ const PaginaIA: React.FC = () => {
             </button>
           </div>
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {sugerencias.map((sugerencia, idx) => (
+            {sugerencias.map((sugerencia) => (
               <TarjetaAnalisis
                 key={sugerencia.id}
                 titulo={sugerencia.titulo}
                 analisis={sugerencia.descripcion}
                 alAgregarAlDashboard={() => manejarAgregarAlDashboard(sugerencia)}
-                animationDelay={idx * 90}
+                tipoGrafico={sugerencia.tipoGrafico}
               />
             ))}
           </div>

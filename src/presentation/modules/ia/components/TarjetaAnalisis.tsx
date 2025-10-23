@@ -4,25 +4,27 @@ interface PropsTarjetaAnalisis {
   titulo: string;
   analisis: string;
   alAgregarAlDashboard: () => void;
-  animationDelay?: number; // milliseconds
+  tipoGrafico?: string;
 }
 
 const TarjetaAnalisis: React.FC<PropsTarjetaAnalisis> = ({
   titulo,
   analisis,
   alAgregarAlDashboard,
-  animationDelay = 0,
+  tipoGrafico,
 }) => {
   return (
-    <article
-      className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-indigo-500/10 backdrop-blur transition hover:border-indigo-300/50 hover:shadow-indigo-500/20 animate-fadeIn"
-      style={{ animationDelay: `${animationDelay}ms` }}
-    >
+    <article className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-indigo-500/10 backdrop-blur transition hover:border-indigo-300/50 hover:shadow-indigo-500/20 animate-fadeIn">
       <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-indigo-500/10 blur-2xl transition group-hover:scale-110" aria-hidden />
       
       <div className="relative space-y-4">
-        <header>
+        <header className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white">{titulo}</h3>
+          {tipoGrafico && (
+            <span className="ml-3 inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200/80">
+              {tipoGrafico}
+            </span>
+          )}
         </header>
         
         <div className="text-sm text-slate-200/80 leading-relaxed">

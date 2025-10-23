@@ -193,8 +193,15 @@ export const subirArchivo = async (archivo: File): Promise<{
   } catch (error) {
     console.error('Error al subir archivo:', error);
     
-    // Si hay error de conexión, usar datos simulados como fallback
-    if (axios.isAxiosError(error) && (error.code === 'ECONNREFUSED' || error.response?.status === 404)) {
+    // Si hay error de conexión (incluyendo errores de red en navegador), usar datos simulados como fallback
+    // En navegadores el error de red puede venir como 'Network Error' o code 'ERR_NETWORK' y no disponer de response
+    if (axios.isAxiosError(error) && (
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ERR_NETWORK' ||
+      error.message === 'Network Error' ||
+      !error.response ||
+      error.response?.status === 404
+    )) {
       console.log('🔄 Backend no disponible, usando datos simulados como fallback');
       
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -251,7 +258,7 @@ export const obtenerDatosGrafico = async (
   idArchivo: string,
   tipoGrafico: string,
   parametros: { eje_x?: string; eje_y?: string; agregacion?: string }
-): Promise<{ datos: any[] }> => {
+): Promise<{ datos: any[]; fuente?: 'real' | 'simulado'; endpointUsado?: string | null }> => {
   // Si estamos en modo demo o usando datos simulados
   if (MODO_DEMO || idArchivo.includes('demo') || idArchivo.includes('fallback')) {
     console.log('🎭 Usando datos simulados para el gráfico');
@@ -276,13 +283,39 @@ export const obtenerDatosGrafico = async (
     };
 
     // Intentar múltiples endpoints en orden de preferencia
+    // El backend expone /chart-data según la documentación; priorizamos esa ruta.
     const endpoints = [
-      '/chart-data', 
+      '/chart-data',
+      '/api/graficos/chart-data',
       '/api/charts/chart-data',
       '/graficos/chart-data',
       '/charts/chart-data'
     ];
+
+    // Cache simple en memoria del endpoint que funcionó (persistente durante la sesión)
+    const cacheKey = '__chartEndpointCache';
+    if (!(globalThis as any)[cacheKey]) {
+      (globalThis as any)[cacheKey] = null;
+    }
+    let cached: string | null = (globalThis as any)[cacheKey] || null;
+
     let lastError: any = null;
+
+    // Si hay cache, intentarla primero
+    if (cached) {
+      try {
+        console.log(`� Intentando endpoint cacheado: ${cached}`);
+        const response = await apiClient.post<RespuestaGraficoAPI>(cached, solicitud);
+        const data = response.data;
+        console.log(`📈 Datos del gráfico recibidos desde cache (${cached}):`, data);
+        return { datos: data.datos, fuente: 'real', endpointUsado: cached } as any;
+      } catch (err) {
+        console.warn(`⚠️ Endpoint cacheado falló: ${cached} - limpiando cache y reintentando`);
+        (globalThis as any)[cacheKey] = null;
+        cached = null;
+        lastError = err;
+      }
+    }
 
     for (const ep of endpoints) {
       try {
@@ -290,14 +323,13 @@ export const obtenerDatosGrafico = async (
         const response = await apiClient.post<RespuestaGraficoAPI>(ep, solicitud);
         const data = response.data;
         console.log(`📈 Datos del gráfico recibidos desde ${ep}:`, data);
-        return { datos: data.datos };
+        // Guardar endpoint exitoso en cache
+        (globalThis as any)[cacheKey] = ep;
+        return { datos: data.datos, fuente: 'real', endpointUsado: ep } as any;
       } catch (err) {
         lastError = err;
-        
         if (axios.isAxiosError(err)) {
           const status = err.response?.status;
-          
-          // Para 404 (Not Found) o 405 (Method Not Allowed), intentar siguiente endpoint
           if (status === 404) {
             console.warn(`❌ Endpoint no encontrado: ${ep} (404)`);
             continue;
@@ -305,13 +337,10 @@ export const obtenerDatosGrafico = async (
             console.warn(`❌ Método no permitido: ${ep} (405 - posible configuración de backend)`);
             continue;
           } else {
-            // Para otros errores (500, 401, etc.), no intentar más endpoints
             console.error(`❌ Error en ${ep}: ${status} - ${err.response?.data?.mensaje || err.message}`);
             throw err;
           }
         }
-        
-        // Error no relacionado con HTTP
         console.error(`❌ Error de conexión en ${ep}:`, err);
         throw err;
       }

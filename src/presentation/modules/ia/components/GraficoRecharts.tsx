@@ -12,6 +12,13 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  AreaChart,
+  Area,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
   ScatterChart,
   Scatter,
 } from 'recharts';
@@ -84,6 +91,13 @@ const normalizarDatos = (datos: any[]) => {
 
 const GraficoRecharts: React.FC<PropsGraficoRecharts> = ({ grafico }) => {
   const datosNormalizados = normalizarDatos(grafico.configuracion.datos || []);
+  // Depuración: mostrar tipo y muestra de datos
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('Renderizando gráfico:', grafico.tipo, 'datosNormalizados sample:', datosNormalizados.slice(0, 5));
+  } catch (e) {
+    // ignore
+  }
 
   const renderizarGrafico = () => {
     switch (grafico.tipo) {
@@ -175,6 +189,27 @@ const GraficoRecharts: React.FC<PropsGraficoRecharts> = ({ grafico }) => {
           </PieChart>
         );
 
+          case 'area':
+            return (
+              <AreaChart data={datosNormalizados}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
+                <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc' }} />
+                <Area type="monotone" dataKey="value" stroke={COLORS[3]} fill={COLORS[3]} fillOpacity={0.2} />
+              </AreaChart>
+            );
+
+          case 'radar':
+            return (
+              <RadarChart cx="50%" cy="50%" outerRadius={80} data={datosNormalizados}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="name" stroke="#94a3b8" />
+                <PolarRadiusAxis />
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc' }} />
+                <Radar name={grafico.titulo} dataKey="value" stroke={COLORS[4]} fill={COLORS[4]} fillOpacity={0.35} />
+              </RadarChart>
+            );
       case 'scatter':
         return (
           <ScatterChart data={datosNormalizados}>
@@ -228,7 +263,15 @@ const GraficoRecharts: React.FC<PropsGraficoRecharts> = ({ grafico }) => {
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full relative">
+      {grafico.configuracion.fuente === 'simulado' && (
+        <div className="absolute right-3 top-3 z-10 inline-flex items-center gap-2 rounded-full bg-yellow-100/90 px-3 py-1 text-xs font-semibold text-yellow-900 shadow">
+          <svg className="h-3 w-3 text-yellow-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <path d="M10 2a8 8 0 110 16 8 8 0 010-16zm1 11H9v-2h2v2zm0-4H9V5h2v4z" />
+          </svg>
+          Simulado
+        </div>
+      )}
       <ResponsiveContainer width="100%" height="100%">
         {renderizarGrafico()}
       </ResponsiveContainer>

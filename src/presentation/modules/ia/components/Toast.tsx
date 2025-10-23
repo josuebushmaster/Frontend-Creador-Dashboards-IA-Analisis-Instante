@@ -31,9 +31,8 @@ const ToastContainer: React.FC<Props> = ({ toasts, onRemove }) => {
         <div
           key={t.id}
           role="status"
-          className={`w-80 max-w-full p-3 rounded-lg text-white shadow-lg ${bgFor(t.type)}`} 
+          className={`w-80 max-w-full p-3 rounded-lg text-white shadow-lg ${bgFor(t.type)} cursor-pointer animate-fadeIn`} 
           onClick={() => onRemove(t.id)}
-          style={{ cursor: 'pointer', animation: 'fadeIn 220ms ease' }}
         >
           <div className="text-sm">{t.message}</div>
         </div>
