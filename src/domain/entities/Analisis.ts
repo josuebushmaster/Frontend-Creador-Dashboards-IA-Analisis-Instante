@@ -8,6 +8,8 @@ export interface ConfiguracionGrafico {
   // Metadata opcional sobre la fuente de datos
   fuente?: 'real' | 'simulado';
   endpointUsado?: string | null;
+  // Nuevo: tipo específico para Recharts si viene del backend
+  frontendTipo?: 'BarChart' | 'LineChart' | 'PieChart' | 'ScatterChart' | 'AreaChart';
 }
 
 export interface Grafico {
@@ -62,6 +64,7 @@ export interface SugerenciaGraficoAPI {
   tipo_grafico: 'barras' | 'lineas' | 'pastel' | 'dispersion' | 'area';
   parametros: ParametrosGrafico;
   insight: string;
+  frontend_tipo?: 'BarChart' | 'LineChart' | 'PieChart' | 'ScatterChart' | 'AreaChart';
 }
 
 export interface MetadatosArchivo {
@@ -103,6 +106,9 @@ export interface RespuestaGraficoAPI {
   tipo_grafico: string;
   titulo: string;
   datos: any[];
-  configuracion: any;
+  configuracion: {
+    frontendTipo?: 'BarChart' | 'LineChart' | 'PieChart' | 'ScatterChart' | 'AreaChart';
+    [key: string]: any;
+  };
   metadatos: any;
 }

@@ -20,6 +20,46 @@ const apiClient = axios.create({
 });
 
 // Datos simulados para modo demo
+
+// Interfaces movidas a domain/entities/Analisis.ts
+
+const mapearFrontendTipoAInterno = (frontendTipo: string) => {
+  const mapeo: Record<string, string> = {
+    'BarChart': 'barras',
+    'LineChart': 'lineas', 
+    'PieChart': 'pastel',
+    'ScatterChart': 'scatter',
+    'AreaChart': 'area',
+    'RadarChart': 'radar'
+  };
+  const resultado = mapeo[frontendTipo] || null;
+  console.debug('mapearFrontendTipoAInterno:', { frontendTipo, resultado: resultado || 'desconocido -> fallback a mapeo tradicional' });
+  return resultado;
+};
+
+const mapearTipoGrafico = (tipoBackend: string) => {
+  const low = (tipoBackend || '').toString().toLowerCase();
+  const mapeo: Record<string, string> = {
+    // barras / bar
+    'bar': 'barras', 'bars': 'barras', 'barras': 'barras', 'histogram': 'barras', 'histograma': 'barras',
+    // lineas / line
+    'line': 'lineas', 'lines': 'lineas', 'lineas': 'lineas', 'serie': 'lineas',
+    // pastel / pie
+    'pie': 'pastel', 'pastel': 'pastel', 'donut': 'pastel',
+    // area
+    'area': 'area',
+    // scatter / dispersion
+    'scatter': 'scatter', 'dispersion': 'scatter', 'dispersiones': 'scatter', 'scatterplot': 'scatter',
+    // radar
+    'radar': 'radar'
+  };
+  const resultado = mapeo[low] || null;
+  // log para depuración: qué recibió el backend y qué se mapeará internamente
+  console.debug('mapearTipoGrafico:', { tipoBackend, low, resultado: resultado || 'desconocido -> por defecto barras' });
+  return resultado || 'barras';
+};
+
+// Datos simulados para modo demo
 const datosSimulados = {
   sugerencias: [
     {
@@ -45,6 +85,22 @@ const datosSimulados = {
       tipo_grafico: 'pie',
       parametros: { x_axis: 'categoria' },
       confidencia: 0.92
+    },
+    {
+      id: '4',
+      titulo: 'Crecimiento del Mercado por Trimestre',
+      descripcion: 'Evolución suave del crecimiento trimestral mostrando una tendencia ascendente con aceleración en Q3.',
+      tipo_grafico: 'area',
+      parametros: { x_axis: 'trimestre', y_axis: 'crecimiento' },
+      confidencia: 0.89
+    },
+    {
+      id: '5',
+      titulo: 'Correlación Edad vs Salario',
+      descripcion: 'Dispersión que muestra la relación positiva entre edad y salario, con algunos valores atípicos interesantes.',
+      tipo_grafico: 'scatter',
+      parametros: { x_axis: 'edad', y_axis: 'salario' },
+      confidencia: 0.85
     }
   ],
   datosGraficos: {
@@ -66,23 +122,22 @@ const datosSimulados = {
       { name: 'Electrónicos', value: 42 },
       { name: 'Ropa', value: 28 },
       { name: 'Hogar', value: 30 }
+    ],
+    area: [
+      { name: 'Q1', value: 8500 },
+      { name: 'Q2', value: 12300 },
+      { name: 'Q3', value: 18700 },
+      { name: 'Q4', value: 22100 }
+    ],
+    scatter: [
+      { name: '25 años', value: 35000, x: 25, y: 35000 },
+      { name: '30 años', value: 45000, x: 30, y: 45000 },
+      { name: '35 años', value: 55000, x: 35, y: 55000 },
+      { name: '40 años', value: 62000, x: 40, y: 62000 },
+      { name: '45 años', value: 70000, x: 45, y: 70000 },
+      { name: '50 años', value: 75000, x: 50, y: 75000 }
     ]
   }
-};
-
-// Interfaces movidas a domain/entities/Analisis.ts
-
-const mapearTipoGrafico = (tipoBackend: string) => {
-  const mapeo: Record<string, string> = {
-    'bar': 'barras',
-    'line': 'lineas',
-    'pie': 'pastel',
-    'area': 'area',
-    'scatter': 'scatter',
-    'radar': 'radar',
-    'histogram': 'barras',
-  };
-  return mapeo[tipoBackend] || 'barras';
 };
 
 // Función auxiliar para extraer parámetros de sugerencias de datos simulados
@@ -100,7 +155,7 @@ export const subirArchivo = async (archivo: File): Promise<{
   resultado: ResultadoAnalisis;
   sugerencias: SugerenciaAnalisis[];
 }> => {
-  // Si estamos en modo demo, usar datos simulados
+  // Si estamos en modo demo, usar datos simulados (sólo cuando la variable de entorno lo permita)
   if (MODO_DEMO) {
     console.log('🎭 Modo demo activado - usando datos simulados');
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -175,15 +230,21 @@ export const subirArchivo = async (archivo: File): Promise<{
 
     // Convertir sugerencias de gráficos
     const sugerencias: SugerenciaAnalisis[] = data.analisis.sugerencias_graficos.map((sug, index) => {
+      // Usar frontend_tipo si está disponible, sino mapear tipo_grafico
+      const tipoFinal = sug.frontend_tipo ? 
+        mapearFrontendTipoAInterno(sug.frontend_tipo) : 
+        mapearTipoGrafico(sug.tipo_grafico);
+      
       return {
         id: `sugerencia-${index + 1}`,
         titulo: sug.titulo,
         descripcion: sug.insight,
-        tipoGrafico: mapearTipoGrafico(sug.tipo_grafico) as any,
+        tipoGrafico: tipoFinal as any,
         configuracion: {
           ejeX: sug.parametros.eje_x,
           ejeY: sug.parametros.eje_y,
           tipoBackend: sug.tipo_grafico,
+          frontendTipo: sug.frontend_tipo, // Preservar para chart-data
         },
         confidencia: 0.9, // El backend no envía confidencia aún, valor por defecto
       };
@@ -193,8 +254,8 @@ export const subirArchivo = async (archivo: File): Promise<{
   } catch (error) {
     console.error('Error al subir archivo:', error);
     
-    // Si hay error de conexión (incluyendo errores de red en navegador), usar datos simulados como fallback
-    // En navegadores el error de red puede venir como 'Network Error' o code 'ERR_NETWORK' y no disponer de response
+    // Si hay error de conexión (incluyendo errores de red en navegador), no devolver datos simulados automáticamente.
+    // En su lugar, lanzar un error claro para que el llamador decida la estrategia de fallback.
     if (axios.isAxiosError(error) && (
       error.code === 'ECONNREFUSED' ||
       error.code === 'ERR_NETWORK' ||
@@ -202,35 +263,8 @@ export const subirArchivo = async (archivo: File): Promise<{
       !error.response ||
       error.response?.status === 404
     )) {
-      console.log('🔄 Backend no disponible, usando datos simulados como fallback');
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const resultado: ResultadoAnalisis = {
-        archivoId: 'fallback-file-id',
-        nombreArchivo: archivo.name,
-        columnas: ['region', 'ventas', 'mes', 'ingresos', 'categoria'],
-        totalFilas: 100,
-      };
-
-      const sugerencias: SugerenciaAnalisis[] = datosSimulados.sugerencias.map((sug) => {
-        const { ejeX, ejeY } = detectarParametros(sug);
-        
-        return {
-          id: sug.id,
-          titulo: sug.titulo,
-          descripcion: sug.descripcion,
-          tipoGrafico: mapearTipoGrafico(sug.tipo_grafico) as any,
-          configuracion: {
-            ejeX: ejeX || '',
-            ejeY: ejeY,
-            tipoBackend: sug.tipo_grafico,
-          },
-          confidencia: sug.confidencia,
-        };
-      });
-
-      return { resultado, sugerencias };
+      console.error('Backend no disponible o error de red detectado al subir archivo. No se devolverán datos simulados automáticamente.');
+      throw new Error('Backend no disponible o error de red al subir archivo');
     }
 
     if (axios.isAxiosError(error)) {
@@ -259,15 +293,28 @@ export const obtenerDatosGrafico = async (
   tipoGrafico: string,
   parametros: { eje_x?: string; eje_y?: string; agregacion?: string }
 ): Promise<{ datos: any[]; fuente?: 'real' | 'simulado'; endpointUsado?: string | null }> => {
-  // Si estamos en modo demo o usando datos simulados
-  if (MODO_DEMO || idArchivo.includes('demo') || idArchivo.includes('fallback')) {
-    console.log('🎭 Usando datos simulados para el gráfico');
+  // Si estamos en modo demo, usar datos simulados (sólo cuando la variable de entorno lo permita)
+  if (MODO_DEMO) {
+    console.log('🎭 Modo demo activado - usando datos simulados para el gráfico');
     await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Mapear tipo del gráfico al tipo clave de datos simulados
+    const tipoMap: Record<string, keyof typeof datosSimulados.datosGraficos> = {
+      'bar': 'bar',
+      'barras': 'bar',
+      'line': 'line', 
+      'lineas': 'line',
+      'pie': 'pie',
+      'pastel': 'pie',
+      'area': 'area',
+      'scatter': 'scatter',
+      'dispersion': 'scatter'
+    };
     
-    const tipoKey = tipoGrafico as keyof typeof datosSimulados.datosGraficos;
+    const tipoKey = tipoMap[tipoGrafico] || 'bar';
     const datos = datosSimulados.datosGraficos[tipoKey] || datosSimulados.datosGraficos.bar;
     
-    return { datos };
+    return { datos, fuente: 'simulado', endpointUsado: null };
   }
 
   try {
@@ -325,7 +372,19 @@ export const obtenerDatosGrafico = async (
         console.log(`📈 Datos del gráfico recibidos desde ${ep}:`, data);
         // Guardar endpoint exitoso en cache
         (globalThis as any)[cacheKey] = ep;
-        return { datos: data.datos, fuente: 'real', endpointUsado: ep } as any;
+        
+        // Usar frontendTipo si está disponible en la respuesta
+        const tipoFrontend = data.configuracion?.frontendTipo ? 
+          mapearFrontendTipoAInterno(data.configuracion.frontendTipo) : 
+          null;
+        
+        return { 
+          datos: data.datos, 
+          fuente: 'real', 
+          endpointUsado: ep,
+          frontendTipo: data.configuracion?.frontendTipo,
+          tipoInferido: tipoFrontend
+        } as any;
       } catch (err) {
         lastError = err;
         if (axios.isAxiosError(err)) {
@@ -353,15 +412,8 @@ export const obtenerDatosGrafico = async (
   } catch (error) {
     console.error('Error al obtener datos del gráfico:', error);
     
-    // Fallback a datos simulados si hay error
-    if (axios.isAxiosError(error)) {
-      console.log('🔄 Usando datos simulados como fallback para gráfico');
-      
-      const tipoKey = tipoGrafico as keyof typeof datosSimulados.datosGraficos;
-      const datos = datosSimulados.datosGraficos[tipoKey] || datosSimulados.datosGraficos.bar;
-      
-      return { datos };
-    }
+    // No usar fallback automático a datos simulados: propagar el error para que el llamador lo gestione
+    console.error('Error al obtener datos del gráfico y no se devolverán datos simulados automáticamente:', error);
     throw error;
   }
 };

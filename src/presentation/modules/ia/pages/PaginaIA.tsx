@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-import { CargaArchivo, TarjetaAnalisis } from '../components/index.ts';
+import { CargaArchivo, TarjetaAnalisis, ExportControls, LoadingProgress } from '../components/index.ts';
 import GraficoRecharts from '../components/GraficoRecharts';
 import ToastContainer, { ToastItem } from '../components/Toast';
 import { useAnalisis } from '../hooks/index.ts';
@@ -29,26 +29,29 @@ const PASOS_PROCESO: Array<{ titulo: string; descripcion: string }> = [
 const PaginaIA: React.FC = () => {
   const {
     cargando,
+    estadoCarga,
+    progreso,
+    tiempoEstimado,
+
     error,
     sugerencias,
     resultado,
+    graficos,
     analizarArchivo,
+    cancelarAnalisis,
     obtenerDatosGrafico,
+    agregarGrafico,
+    eliminarGrafico,
     limpiarEstado,
   } = useAnalisis();
 
   const [archivoSubido, setArchivoSubido] = useState(false);
-  const [graficosDelDashboard, setGraficosDelDashboard] = useState<Grafico[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const dashboardRef = useRef<HTMLDivElement>(null);
 
   const limpiarTodo = () => {
-    setGraficosDelDashboard([]);
     setArchivoSubido(false);
     limpiarEstado();
-  };
-
-  const limpiarDashboards = () => {
-    setGraficosDelDashboard([]);
   };
 
   const manejarCargaArchivo = async (archivo: File) => {
@@ -111,9 +114,11 @@ const PaginaIA: React.FC = () => {
         eje_y: sugerencia.configuracion.ejeY || undefined,
       };
 
-      console.log('📤 Enviando al backend:', { tipoBackend, parametros });
+  console.log('📤 Enviando al backend:', { tipoBackend, parametros });
+  // Depuración: mostrar la sugerencia completa recibida del backend
+  console.debug('Sugerencia completa antes de solicitar datos:', sugerencia);
 
-      const respuesta = await obtenerDatosGrafico(resultado.archivoId, tipoBackend, parametros) as any;
+  const respuesta = await obtenerDatosGrafico(resultado.archivoId, tipoBackend, parametros) as any;
 
       // Compatibilidad: la API devuelve { datos, fuente?, endpointUsado? }
       const datosArray = respuesta?.datos || respuesta;
@@ -146,6 +151,7 @@ const PaginaIA: React.FC = () => {
           datos: datosArray,
           fuente: respuesta?.fuente || 'real',
           endpointUsado: respuesta?.endpointUsado || null,
+          frontendTipo: respuesta?.frontendTipo || sugerencia.configuracion.frontendTipo,
         },
       };
 
@@ -161,7 +167,7 @@ const PaginaIA: React.FC = () => {
         // ignore
       }
 
-      setGraficosDelDashboard(prev => [...prev, nuevoGrafico]);
+      agregarGrafico(nuevoGrafico);
       const id = `tg-${Date.now()}`;
       setToasts(prev => [...prev, { id, message: 'Gráfico agregado al dashboard', type: 'success' }]);
       setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
@@ -174,7 +180,7 @@ const PaginaIA: React.FC = () => {
   };
 
   const generarDisposicion = () =>
-    graficosDelDashboard.map((grafico, indice) => ({
+    graficos.map((grafico, indice) => ({
       i: grafico.id,
       x: (indice * 4) % 12,
       y: Math.floor(indice / 3) * 4,
@@ -214,6 +220,15 @@ const PaginaIA: React.FC = () => {
       )}
 
       <CargaArchivo alCargarArchivo={manejarCargaArchivo} cargando={cargando} />
+
+      {cargando && (
+        <LoadingProgress
+          estadoCarga={estadoCarga}
+          progreso={progreso}
+          tiempoEstimado={tiempoEstimado}
+          onCancelar={cancelarAnalisis}
+        />
+      )}
 
       {!archivoSubido && sugerencias.length === 0 && !error && (
         <section className="rounded-3xl border border-white/10 bg-white/5 p-8 text-slate-100 shadow-xl shadow-indigo-500/10 backdrop-blur">
@@ -275,7 +290,7 @@ const PaginaIA: React.FC = () => {
         </section>
       )}
 
-      {graficosDelDashboard.length > 0 && (
+      {graficos.length > 0 && (
         <section className="animate-fadeIn">
           <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-2">
@@ -288,55 +303,63 @@ const PaginaIA: React.FC = () => {
                 Dashboard interactivo
               </h2>
               <p className="text-sm text-slate-200/70">
-                {graficosDelDashboard.length} gráfico{graficosDelDashboard.length !== 1 ? 's' : ''} agregado{graficosDelDashboard.length !== 1 ? 's' : ''}. Reorganiza con drag-and-drop y construye tu narrativa.
+                {graficos.length} gráfico{graficos.length !== 1 ? 's' : ''} agregado{graficos.length !== 1 ? 's' : ''}. Reorganiza con drag-and-drop y construye tu narrativa.
               </p>
             </div>
-            <button
-              onClick={limpiarDashboards}
-              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 bg-linear-to-r from-rose-500 to-pink-500 text-white font-medium shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-200"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Borrar dashboard
-            </button>
-          </div>
-          <CuadriculaResponsiva
-            className="layout"
-            layouts={{ lg: generarDisposicion() }}
-            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-            rowHeight={100}
-            draggableHandle=".drag-handle"
-          >
-            {graficosDelDashboard.map(grafico => (
-              <div
-                key={grafico.id}
-                className="flex h-full flex-col rounded-3xl border border-white/10 bg-white/80 p-6 shadow-xl shadow-indigo-500/10 backdrop-blur transition hover:border-indigo-200"
+            <div className="flex items-center gap-3">
+              <ExportControls 
+                dashboardRef={dashboardRef}
+                graficosCount={graficos.length}
+              />
+              <button
+                onClick={limpiarEstado}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 bg-linear-to-r from-rose-500 to-pink-500 text-white font-medium shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-200"
               >
-                <div className="drag-handle mb-4 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                    <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                    </svg>
-                    {grafico.titulo}
-                  </h3>
-                  <button
-                    title="Eliminar gráfico"
-                    className="rounded-full p-2 text-slate-400 transition hover:bg-rose-100 hover:text-rose-500"
-                    onClick={() => setGraficosDelDashboard(prev => prev.filter(g => g.id !== grafico.id))}
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Borrar dashboard
+              </button>
+            </div>
+          </div>
+          <div ref={dashboardRef}>
+            <CuadriculaResponsiva
+              className="layout"
+              layouts={{ lg: generarDisposicion() }}
+              breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+              cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+              rowHeight={100}
+              draggableHandle=".drag-handle"
+            >
+              {graficos.map(grafico => (
+                <div
+                  key={grafico.id}
+                  className="flex h-full flex-col rounded-3xl border border-white/10 bg-white/80 p-6 shadow-xl shadow-indigo-500/10 backdrop-blur transition hover:border-indigo-200"
+                >
+                  <div className="drag-handle mb-4 flex items-center justify-between">
+                    <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                      <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                      </svg>
+                      {grafico.titulo}
+                    </h3>
+                    <button
+                      title="Eliminar gráfico"
+                      className="rounded-full p-2 text-slate-400 transition hover:bg-rose-100 hover:text-rose-500"
+                      onClick={() => eliminarGrafico(grafico.id)}
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex-1">
+                    <GraficoRecharts grafico={grafico} />
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <GraficoRecharts grafico={grafico} />
-                </div>
-              </div>
-            ))}
-          </CuadriculaResponsiva>
+              ))}
+            </CuadriculaResponsiva>
+          </div>
         </section>
       )}
       <ToastContainer toasts={toasts} onRemove={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
