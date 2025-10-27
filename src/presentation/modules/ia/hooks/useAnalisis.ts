@@ -191,6 +191,18 @@ export const useAnalisis = () => {
     setGraficos([]);
   };
 
+  // Borra solamente los gráficos persistidos del dashboard, sin tocar
+  // las sugerencias de análisis ni el resultado del análisis.
+  const limpiarSoloGraficos = () => {
+    try {
+      setGraficos([]);
+      setEstado(prev => ({ ...prev, graficos: [] }));
+      console.info('🧹 Solo se han eliminado los gráficos del dashboard');
+    } catch (err) {
+      console.warn('No se pudo limpiar solo los gráficos:', err);
+    }
+  };
+
   // Actualizar estado con gráficos persistidos al montar
   useEffect(() => {
     setEstado(prev => ({ ...prev, graficos }));
@@ -206,5 +218,6 @@ export const useAnalisis = () => {
     eliminarGrafico,
     reordenarGraficos,
     limpiarEstado,
+    limpiarSoloGraficos,
   };
 };

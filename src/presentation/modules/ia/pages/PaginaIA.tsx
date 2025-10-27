@@ -43,6 +43,7 @@ const PaginaIA: React.FC = () => {
     agregarGrafico,
     eliminarGrafico,
     limpiarEstado,
+    limpiarSoloGraficos,
   } = useAnalisis();
 
   const [archivoSubido, setArchivoSubido] = useState(false);
@@ -312,7 +313,7 @@ const PaginaIA: React.FC = () => {
                 graficosCount={graficos.length}
               />
               <button
-                onClick={limpiarEstado}
+                onClick={limpiarSoloGraficos}
                 className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 bg-linear-to-r from-rose-500 to-pink-500 text-white font-medium shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-200"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
